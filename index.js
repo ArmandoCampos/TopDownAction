@@ -298,6 +298,32 @@ class Slide {
   }
 }
 
+class Pendulum {
+  // Value that bounces back and forth
+  constructor(base, min, max, spd){
+    this.base = base;
+    this.vmin = min;
+    this.vmax = max;
+    this.spd = spd;
+    this.dir = 1;
+  }
+
+  update(){
+    this.base += (this.spd*this.dir);
+    if(this.dir == 1){ // Less than, Increasing
+      if(this.base >= this.vmax){
+        //this.base = this.vmax;
+        this.dir = -1;
+      }
+    }else{ // Greater than, Decreasing
+      if(this.base <= this.vmin){
+        //this.base = this.vmin;
+        this.dir = 1;
+      }
+    }
+  }
+}
+
 class Mask {
   constructor(xx, yy, width, height){
     this.x = xx;
@@ -467,7 +493,7 @@ class AbstractEntity {
     var hdir = bool_sub(ir, il), vdir = bool_sub(id, iu);
 
     // Turn
-    this.faceangle = slide_into(this.faceangle, this.faceangle+(hdir*10), 12);
+    this.faceangle = slide_into(this.faceangle, this.faceangle+(hdir*60), 16);
 
     // Forward
     if(iu){
@@ -500,6 +526,8 @@ class AbstractEntity {
           // Spawn Wave
           var wave = instance_add(12, hitx, hity);
           wave.ang = fang;
+          // Spawn Orb
+          instance_add(13, hitx, hity);
         }
       }
     }else{
@@ -693,10 +721,10 @@ class AbstractEntity {
     var hh = this.msk.hh;
     //draw_rectangle(ll, uu, ww, hh, this.color);
     if(this.type == 0){
-      //GAME.ctx.font = "48px Arial";
-      //GAME.ctx.textAlign = "center";
-      //GAME.ctx.fillStyle = "lightyellow";
-      //GAME.ctx.fillText(String(this.score), this.post.x, this.post.y-(this.msk.hh*2));
+      GAME.ctx.font = "128px Times";
+      GAME.ctx.textAlign = "center";
+      GAME.ctx.fillStyle = "lightyellow";
+      GAME.ctx.fillText("$"+String(this.score), 128, 128);
       // Draw Player
       draw_set_color("#FFFFFF");
       var hfw = ww/2, hfh = hh/2;
@@ -916,6 +944,40 @@ class Wave {
   }
 }
 
+class Orb {
+  constructor(xx, yy){
+    this.instID = GAME.INSTANCES.length;
+    this.post = {x: xx, y: yy};
+    this.value = 1;
+    this.color = "lightgreen";
+    this.pulsate = new Pendulum(24, 16, 24, 6);
+
+  }
+
+  update(){
+    this.pulsate.update();
+    // sit around
+    var pl = GAME.PLAYER;
+    var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
+    if(dis < 48){
+      pl.score++;
+      instance_destroy(this.instID);
+    }
+  }
+
+  draw(){
+    draw_set_color(this.color);
+    draw_circle(this.post.x, this.post.y, 8, this.pulsate.base);
+    draw_set_color("yellow");
+    draw_circle(this.post.x, this.post.y, 4, 8);
+  }
+
+  render(){
+    this.update();
+    this.draw();
+  }
+}
+
 /*
 GAME STATES:
 0 - INITIALIZATION
@@ -1043,6 +1105,7 @@ function instance_create(type, xx, yy){
     case 10: return new HitRadius(xx, yy);
     case 11: return new GrowRadius(xx, yy);
     case 12: return new Wave(xx, yy);
+    case 13: return new Orb(xx, yy);
   }
   return undefined;
 }
