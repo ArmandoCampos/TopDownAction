@@ -349,7 +349,7 @@ class AbstractEntity {
     this.post = { x: xx, y : yy };
     this.vel = { h: 0, v : 0 };
     this.msk = new Mask(xx, yy, sz, sz);
-    this.spd = 4*(sz/32);
+    this.spd = 8;//*(sz/32);
     this.color = "tomato";
     // Physics
     this.hface = 1;
@@ -358,6 +358,8 @@ class AbstractEntity {
     this.onwallB = false;
     this.cling = false;
     // Player
+    this.hp_max = 10;
+    this.hp = this.hp_max;
     this.stamina_max = 8;
     this.stamina = this.stamina_max;
     this.input_set(1);
@@ -482,18 +484,26 @@ class AbstractEntity {
 
     if(isp){
       // Swing
-      if(this.batslide.base == this.batslide.dest){
-        if(this.batslide.dest == 0){
-          this.batslide.dest = -140;
-        }else{
-          this.batslide.dest = 0;
+      if(this.stamina > 4){
+        if(this.batslide.base == this.batslide.dest){
+          this.stamina_use(4);
+          if(this.batslide.dest == 0){
+            this.batslide.dest = -140;
+          }else{
+            this.batslide.dest = 0;
+          }
+          // Spawn Hitbox
+          var fang = degToRad(this.faceangle);
+          var nx = this.post.x+(this.vel.h*this.spd*3), ny = this.post.y+(this.vel.v*this.spd*3);
+          var hitx = nx+(lengthdir_x(96, fang)), hity = ny+(lengthdir_y(96, fang));
+          instance_add(10, hitx, hity);
+          // Spawn Wave
+          var wave = instance_add(12, hitx, hity);
+          wave.ang = fang;
         }
-        // Spawn Hitbox
-        var fang = degToRad(this.faceangle);
-        var nx = this.post.x+(this.vel.h*this.spd), ny = this.post.y+(this.vel.v*this.spd);
-        var hitx = nx+(lengthdir_x(96, fang)), hity = ny+(lengthdir_y(96, fang));
-        instance_add(10, hitx, hity);
       }
+    }else{
+      this.stamina_charge();
     }
     this.batangle = this.batslide.base;
     /*
@@ -716,9 +726,13 @@ class AbstractEntity {
       draw_set_color("#FFF");
       draw_line(this.post.x, this.post.y, tarx, tary, 2, 0);
       // Draw Stamina
-      draw_set_color("lightgreen");
-      draw_rectangle(ll, uu-48, this.msk.ww, 16, "#424242");
-      draw_rectangle(ll, uu-48, (this.stamina / this.stamina_max)*this.msk.ww, 16, "lightgreen");
+      draw_rectangle(ll, uu-64, this.msk.ww+16, 16, "#424242");
+      var stmissing = (this.stamina_max - this.stamina)/2;
+      draw_rectangle(ll, uu-64, (this.stamina / this.stamina_max)*(this.msk.ww+16), 16, "lightgreen");
+      // Draw HP
+      draw_rectangle(ll, uu-84, this.msk.ww+16, 16, "#424242");
+      draw_rectangle(ll, uu-84, (this.hp / this.hp_max)*(this.msk.ww+16), 16, "tomato");
+      // try drawing them centered
     }
   }
 
@@ -845,10 +859,10 @@ class HitRadius {
   }
 
   draw(){
-    draw_set_rgba(255, 255, 255, 0.1);
-    //draw_set_color(this.color);
+    //draw_set_rgba(255, 255, 255, 0.1);
+    draw_set_color(this.color);
     draw_circle(this.post.x, this.post.y, 8, this.radius);
-    draw_set_rgba(255, 255, 255, 1.0);
+    //draw_set_rgba(255, 255, 255, 1.0);
   }
 
   render(){
@@ -867,10 +881,44 @@ class GrowRadius extends HitRadius {
 
 }
 
+class Wave {
+  constructor(xx, yy){
+    this.instID = GAME.INSTANCES.length;
+    this.post = {x: xx, y: yy};
+    this.ang = 0;
+    this.spd = 96;
+    this.color = "tomato";
+    this.lifespan = 10;
+  }
+
+  update(){
+    this.post.x += lengthdir_x(this.spd, this.ang);
+    this.post.y += lengthdir_y(this.spd, this.ang);
+    this.lifespan--;
+    if(this.lifespan <= 0)instance_destroy(this.instID);
+  }
+
+  draw(){
+    draw_set_color(this.color);
+    draw_line(this.post.x, this.post.y, this.post.x-lengthdir_x(32, this.ang), this.post.y-lengthdir_y(32, this.ang), 4, 0);
+    var wx = this.post.x - lengthdir_x(32, this.ang - 32);
+    var wy = this.post.y - lengthdir_y(32, this.ang - 32);
+    draw_line(this.post.x, this.post.y, wx, wy, 4, 0);
+    var wx2 = this.post.x - lengthdir_x(32, this.ang + 32);
+    var wy2 = this.post.y - lengthdir_y(32, this.ang + 32);
+    draw_line(this.post.x, this.post.y, wx2, wy2, 4, 0);
+    draw_set_color("#FFFFFF");
+  }
+
+  render(){
+    this.update();
+    this.draw();
+  }
+}
+
 /*
 GAME STATES:
 0 - INITIALIZATION
-1 - WAIT FOR PLAYER START
 */
 var STATE = 0;
 var GAME = {
@@ -884,7 +932,7 @@ var GAME = {
   CAMERA: new Camera(NONE),
   render: function(){
     draw_bg();
-    draw_grid();
+    draw_insts();
     GAME.PLAYER.render();
   },
   PLAYER: new PlayerOne(0, 32, 32)
@@ -922,7 +970,7 @@ function draw_bg(){
   draw_rectangle(GAME.CAMERA.x, GAME.CAMERA.y, canvas.width, canvas.height, "#000000");
 }
 
-function draw_grid(){
+function draw_insts(){
   if(STATE == 0)return;
   
   var grid = GAME.INSTANCES;
@@ -977,6 +1025,7 @@ function level_trash(){
 function instance_add(type, xx, yy){
   var inst = instance_create(type, xx, yy);
   GAME.INSTANCES.push(inst);
+  return inst;
 }
 
 function instance_create(type, xx, yy){
@@ -993,6 +1042,7 @@ function instance_create(type, xx, yy){
     case 9: return new Particle(xx, yy);
     case 10: return new HitRadius(xx, yy);
     case 11: return new GrowRadius(xx, yy);
+    case 12: return new Wave(xx, yy);
   }
   return undefined;
 }
