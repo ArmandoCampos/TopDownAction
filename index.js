@@ -393,7 +393,7 @@ class AbstractEntity {
     this.faceangle = 0;
     this.batangle = 0;
     this.batswing = false;
-    this.batslide = new Slide(0, 0, 30);
+    this.batslide = new Slide(0, 0, 60);
   }
   // Get
   get side_l(){
@@ -522,12 +522,13 @@ class AbstractEntity {
           var fang = degToRad(this.faceangle);
           var nx = this.post.x+(this.vel.h*this.spd*3), ny = this.post.y+(this.vel.v*this.spd*3);
           var hitx = nx+(lengthdir_x(96, fang)), hity = ny+(lengthdir_y(96, fang));
-          instance_add(10, hitx, hity);
+          var hitr = instance_add(10, hitx, hity);
+          hitr.creator = this;
           // Spawn Wave
-          var wave = instance_add(12, hitx, hity);
-          wave.ang = fang;
-          // Spawn Orb
-          instance_add(13, hitx, hity);
+          if(this.hp == this.hp_max){
+            var wave = instance_add(12, hitx, hity);
+            wave.ang = fang;
+          }
         }
       }
     }else{
@@ -566,6 +567,7 @@ class AbstractEntity {
     // COLLISION CHECK
     var grid = GAME.INSTANCES;
     var gridw = grid.length;
+    /*
     for(var i = 0; i < gridw; i++){
       var inst = grid[i];
       if(inst != NONE){
@@ -689,7 +691,7 @@ class AbstractEntity {
         }
       }
     }
-    
+    */
     // Update Position
     // add force to velocity
     if(forceh != 0)this.vel.h = forceh;
@@ -775,6 +777,7 @@ class PlayerOne extends AbstractEntity {
   constructor(xx, yy){
     super(0, xx, yy);
     this.input_set(0);
+    this.LABEL = 1;
   }
 }
 
@@ -873,24 +876,45 @@ class CheckPoint extends AbstractEntity {
 
 class HitRadius {
   constructor(xx, yy){
+    this.LABEL = 0;
     this.radius = 0;
     this.post = {x: xx, y: yy};
     this.instID = GAME.INSTANCES.length;
     this.color = "tomato";
     this.radmax = 108;
     this.radspd = 20;
+    this.creator = NONE;
+    this.dmg = 1;
   }
 
   update(){
     this.radius = slide_into(this.radius, this.radmax, this.radspd);
     if(this.radius >= this.radmax)instance_destroy(this.instID);// Destroy
+    if(this.dmg > 0){
+      var gridw = GAME.INSTANCES.length;
+      for(var i = 0; i < gridw; i++){
+        var inst = GAME.INSTANCES[i];
+        if(inst.LABEL == 1){
+          // Vulnerable
+          var dis = getDistance(this.post.x, this.post.y, inst.post.x, inst.post.y);
+          if(dis <= this.radmax){
+            // Damage
+            if(this.creator != inst){
+              // Can Damage
+              inst.destroy();
+              instance_destroy(this.instID);
+            }
+          }
+        }
+      }
+    }
   }
 
   draw(){
-    //draw_set_rgba(255, 255, 255, 0.1);
-    draw_set_color(this.color);
-    draw_circle(this.post.x, this.post.y, 8, this.radius);
-    //draw_set_rgba(255, 255, 255, 1.0);
+    
+    //draw_set_color(this.color);
+    //draw_circle(this.post.x, this.post.y, 8, this.radius);
+    
   }
 
   render(){
@@ -905,6 +929,7 @@ class GrowRadius extends HitRadius {
     this.color = "#FFFFFF";
     this.radmax = 48;
     this.radspd = 6;
+    this.dmg = 0;
   }
 
 }
@@ -912,6 +937,7 @@ class GrowRadius extends HitRadius {
 class Wave {
   constructor(xx, yy){
     this.instID = GAME.INSTANCES.length;
+    this.LABEL = 0;
     this.post = {x: xx, y: yy};
     this.ang = 0;
     this.spd = 96;
@@ -947,6 +973,7 @@ class Wave {
 class Orb {
   constructor(xx, yy){
     this.instID = GAME.INSTANCES.length;
+    this.LABEL = 0;
     this.post = {x: xx, y: yy};
     this.value = 1;
     this.color = "lightgreen";
@@ -961,6 +988,7 @@ class Orb {
     var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
     if(dis < 48){
       pl.score++;
+      pl.stamina = pl.stamina_max;
       instance_destroy(this.instID);
     }
   }
@@ -968,13 +996,106 @@ class Orb {
   draw(){
     draw_set_color(this.color);
     draw_circle(this.post.x, this.post.y, 8, this.pulsate.base);
-    draw_set_color("yellow");
-    draw_circle(this.post.x, this.post.y, 4, 8);
   }
 
   render(){
     this.update();
     this.draw();
+  }
+}
+
+class Spawner {
+  constructor(xx, yy){
+    this.instID = GAME.INSTANCES.length;
+    this.LABEL = 0;
+    this.post = {x: xx, y: yy};
+  }
+
+  update(){
+    // do nothing
+  }
+
+  draw(){
+    draw_set_color("red");
+    draw_circle(this.post.x, this.post.y, 8, 32);
+  }
+
+  render(){
+    this.update();
+    this.draw();
+  }
+}
+
+class Enemy {
+  constructor(xx, yy){
+    this.instID = GAME.INSTANCES.length;
+    this.LABEL = 1;
+    this.post = {x: xx, y: yy};
+    this.vel = {h: 0, v: 0};
+    this.spd = 6;
+    this.faceangle = 0;
+  }
+
+  boundcheck(){
+    var half = 16;
+    var sl = this.post.x - half, sr = this.post.x + half;
+    var su = this.post.y - half, sd = this.post.y + half;
+    if(sl > canvas.width)this.post.x = -half;
+    if(sr < -half)this.post.x = canvas.width;//getElWidth("canvas");
+    if(su > canvas.height)this.post.y = -half;
+    if(sd < -half)this.post.y = canvas.height+half;//getElHeight("canvas");
+  }
+
+  update(){
+    // do nothing
+    
+    var pl = GAME.PLAYER;
+    var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
+    if(dis < 720){
+      // Approach
+      // Turn
+      
+      var dir = getDirection(this.post.x, this.post.y, pl.post.x, pl.post.y);
+      this.faceangle = slide_into(this.faceangle, dir, 16);
+      this.vel.h = slide_into(this.vel.h, lengthdir_x(6, degToRad(this.faceangle)), 1);
+      this.vel.v = slide_into(this.vel.v, lengthdir_y(6, degToRad(this.faceangle)), 1);
+
+      // Spawn Dust Effect
+      
+      var fang = degToRad(this.faceangle);
+      var dstx = this.post.x, dsty = this.post.y;
+      instance_add(11, dstx, dsty);
+      
+    }else{
+      // Still
+      this.vel.h = slide_into(this.vel.h, 0, 1);
+      this.vel.v = slide_into(this.vel.v, 0, 1);
+    }
+    
+    var vx = (this.vel.h*this.spd);
+    var vy = (this.vel.v*this.spd);
+    this.post.x += vx;
+    this.post.y += vy;
+    this.boundcheck();
+  }
+
+  draw(){
+    draw_set_color("red");
+    draw_circle(this.post.x, this.post.y, 8, 32);
+  }
+
+  render(){
+    this.update();
+    this.draw();
+  }
+
+  destroy(){
+    // Spawn Loot Drops
+    if(random_int(10) < 4){
+      // Spawn Orb
+      instance_add(13, this.post.x, this.post.y);
+    }
+    instance_destroy(this.instID);
   }
 }
 
@@ -997,7 +1118,7 @@ var GAME = {
     draw_insts();
     GAME.PLAYER.render();
   },
-  PLAYER: new PlayerOne(0, 32, 32)
+  PLAYER: new PlayerOne(canvas.width/2, canvas.height/2)
 }
 
 // [ - - Game Methods - - ]
@@ -1019,6 +1140,12 @@ function update(){
   switch(STATE){
     case 0: // INITIALIZATION
       //level_load(GAME.level[1]);
+      var cwf = canvas.width/4, chf = canvas.height/4;
+      instance_add(14, cwf, chf);
+      instance_add(14, cwf, canvas.height - chf);
+      instance_add(14, canvas.width - cwf, canvas.height - chf);
+      instance_add(14, canvas.width - cwf, chf);
+      instance_add(15, cwf+32, chf+32);
       STATE = 1;
       break;
     case 1:
@@ -1106,6 +1233,8 @@ function instance_create(type, xx, yy){
     case 11: return new GrowRadius(xx, yy);
     case 12: return new Wave(xx, yy);
     case 13: return new Orb(xx, yy);
+    case 14: return new Spawner(xx, yy);
+    case 15: return new Enemy(xx, yy);
   }
   return undefined;
 }
