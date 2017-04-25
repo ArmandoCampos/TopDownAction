@@ -366,6 +366,8 @@ class Camera {
 class AbstractEntity {
   constructor(type, xx, yy){
     this.type = type;
+    this.instID = GAME.INSTANCES.length;
+    this.LABEL = 1;
     var sz = TILE_SIZE;
     if(this.type == 0){
         sz = TILE_SIZE/2;
@@ -394,6 +396,8 @@ class AbstractEntity {
     this.batangle = 0;
     this.batswing = false;
     this.batslide = new Slide(0, 0, 60);
+    this.STATE = 0;
+    this.stateslide = new Slide(0, 0, 0.05);
   }
   // Get
   get side_l(){
@@ -481,10 +485,29 @@ class AbstractEntity {
     }
   }
 
+  damage(dmg){
+    //alert("hey");
+    this.hp -= dmg;
+    this.STATE = 1;
+    this.stateslide.base = 1;
+    if(this.hp <= 0){
+      this.hp = 0;
+      this.destroy();
+    }
+  }
+
+  destroy(){
+    instance_destroy(this.instID);
+  }
+
   // Update
   update(){
     // Swing Slide
     this.batslide.update();
+    this.stateslide.update();
+    if(this.STATE == 1){
+      if(this.stateslide.base == this.stateslide.dest)this.STATE = 0;
+    }
     // Physics
     //this.gravity();
     var ir = Key.isDown(this.input[0]), il = Key.isDown(this.input[1]);
@@ -525,10 +548,12 @@ class AbstractEntity {
           var hitr = instance_add(10, hitx, hity);
           hitr.creator = this;
           // Spawn Wave
+          /*
           if(this.hp == this.hp_max){
             var wave = instance_add(12, hitx, hity);
             wave.ang = fang;
           }
+          */
         }
       }
     }else{
@@ -901,8 +926,12 @@ class HitRadius {
             // Damage
             if(this.creator != inst){
               // Can Damage
-              inst.destroy();
-              instance_destroy(this.instID);
+              if(inst.STATE == 0){
+                // Vulnerable State
+                //alert("hello");
+                inst.damage(this.dmg);
+                instance_destroy(this.instID);
+              }
             }
           }
         }
@@ -911,10 +940,10 @@ class HitRadius {
   }
 
   draw(){
-    
-    //draw_set_color(this.color);
-    //draw_circle(this.post.x, this.post.y, 8, this.radius);
-    
+    //if(this.dmg == 0){
+      draw_set_color(this.color);
+      draw_circle(this.post.x, this.post.y, 8, this.radius);
+    //}
   }
 
   render(){
@@ -984,7 +1013,8 @@ class Orb {
   update(){
     this.pulsate.update();
     // sit around
-    var pl = GAME.PLAYER;
+    //var pl = GAME.PLAYER;
+    var pl = PLAYER;
     var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
     if(dis < 48){
       pl.score++;
@@ -1034,6 +1064,10 @@ class Enemy {
     this.vel = {h: 0, v: 0};
     this.spd = 6;
     this.faceangle = 0;
+    this.dirchange = new Pendulum(0, -16, 16, 1);
+    this.STATE = 0; // 0 - Neutral, 1- Damaged
+    this.hp = 1;
+    this.hp_max = 1;
   }
 
   boundcheck(){
@@ -1048,8 +1082,9 @@ class Enemy {
 
   update(){
     // do nothing
-    
-    var pl = GAME.PLAYER;
+    this.dirchange.update();
+    //var pl = GAME.PLAYER;
+    var pl = PLAYER;
     var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
     if(dis < 720){
       // Approach
@@ -1061,15 +1096,30 @@ class Enemy {
       this.vel.v = slide_into(this.vel.v, lengthdir_y(6, degToRad(this.faceangle)), 1);
 
       // Spawn Dust Effect
-      
       var fang = degToRad(this.faceangle);
       var dstx = this.post.x, dsty = this.post.y;
       instance_add(11, dstx, dsty);
+
+      // Damage
+      if(pl.STATE == 0){
+        if(dis < 48){
+          //alert("hey");
+          //var hit = new HitRadius(this.post.x, this.post.y);
+          var hit = instance_add(10, this.post.x, this.post.y);
+          hit.creator = this;
+          hit.dmg = 4;
+        }
+      }
       
     }else{
+      this.faceangle = slide_into(this.faceangle, this.faceangle+this.dirchange.base, 16);
+      this.vel.h = slide_into(this.vel.h, lengthdir_x(6, degToRad(this.faceangle)), 0.1);
+      this.vel.v = slide_into(this.vel.v, lengthdir_y(6, degToRad(this.faceangle)), 0.1);
+      /*
       // Still
       this.vel.h = slide_into(this.vel.h, 0, 1);
       this.vel.v = slide_into(this.vel.v, 0, 1);
+      */
     }
     
     var vx = (this.vel.h*this.spd);
@@ -1089,6 +1139,15 @@ class Enemy {
     this.draw();
   }
 
+  damage(dmg){
+    this.hp -= dmg;
+    this.STATE = 1;
+    if(this.hp <= 0){
+      this.hp = 0;
+      this.destroy();
+    }
+  }
+
   destroy(){
     // Spawn Loot Drops
     if(random_int(10) < 4){
@@ -1103,7 +1162,7 @@ class Enemy {
 GAME STATES:
 0 - INITIALIZATION
 */
-var STATE = 0;
+var STATE = 0, PLAYER = NONE;
 var GAME = {
   ctx: getByID("canvas").getContext("2d"),
   INSTANCES: [NONE, NONE],
@@ -1116,9 +1175,9 @@ var GAME = {
   render: function(){
     draw_bg();
     draw_insts();
-    GAME.PLAYER.render();
+    //GAME.PLAYER.render();
   },
-  PLAYER: new PlayerOne(canvas.width/2, canvas.height/2)
+  //PLAYER: instance_add(0, canvas.width/2, canvas.height/2)//new PlayerOne(canvas.width/2, canvas.height/2)
 }
 
 // [ - - Game Methods - - ]
@@ -1140,6 +1199,7 @@ function update(){
   switch(STATE){
     case 0: // INITIALIZATION
       //level_load(GAME.level[1]);
+      PLAYER = instance_add(0, canvas.width/2, canvas.height/2);
       var cwf = canvas.width/4, chf = canvas.height/4;
       instance_add(14, cwf, chf);
       instance_add(14, cwf, canvas.height - chf);
