@@ -314,7 +314,7 @@ class Pendulum {
       if(this.base >= this.vmax){
         //this.base = this.vmax;
         this.dir = -1;
-      }
+x      }
     }else{ // Greater than, Decreasing
       if(this.base <= this.vmin){
         //this.base = this.vmin;
@@ -972,6 +972,7 @@ class Wave {
     this.spd = 96;
     this.color = "tomato";
     this.lifespan = 10;
+    this.creator = NONE;
   }
 
   update(){
@@ -979,6 +980,21 @@ class Wave {
     this.post.y += lengthdir_y(this.spd, this.ang);
     this.lifespan--;
     if(this.lifespan <= 0)instance_destroy(this.instID);
+
+    // Check for Vulnerable Instance
+    var pl = PLAYER;
+    var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
+    if(dis < 16){
+      // Within Range
+      if(pl.STATE == 0){
+        //alert("hey");
+        //var hit = new HitRadius(this.post.x, this.post.y);
+        var hit = instance_add(10, this.post.x, this.post.y);
+        hit.creator = this.creator;
+        hit.dmg = 1;
+        instance_destroy(this.instID);
+      }
+    }
   }
 
   draw(){
@@ -1017,10 +1033,14 @@ class Orb {
     var pl = PLAYER;
     var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
     if(dis < 48){
-      pl.score++;
-      pl.stamina = pl.stamina_max;
+      this.effect(pl);
       instance_destroy(this.instID);
     }
+  }
+
+  effect(pl){
+    pl.score++;
+    pl.stamina = pl.stamina_max;
   }
 
   draw(){
@@ -1034,6 +1054,18 @@ class Orb {
   }
 }
 
+class OrbHP extends Orb {
+  constructor(xx, yy){
+    super(xx, yy);
+    this.color = "tomato";
+  }
+
+  effect(pl){
+    pl.hp+=4;
+    if(pl.hp > pl.hp_max)pl.hp = pl.hp_max;
+  }
+}
+
 class Spawner {
   constructor(xx, yy){
     this.instID = GAME.INSTANCES.length;
@@ -1043,6 +1075,45 @@ class Spawner {
 
   update(){
     // do nothing
+  }
+
+  draw(){
+    draw_set_color("red");
+    draw_circle(this.post.x, this.post.y, 8, 32);
+  }
+
+  render(){
+    this.update();
+    this.draw();
+  }
+}
+
+class SpawnerWave {
+  // Spawn Waves
+  constructor(xx, yy){
+    this.instID = GAME.INSTANCES.length;
+    this.LABEL = 0;
+    this.post = {x: xx, y: yy};
+    this.delay = new Slide(0, 0, 0.1);
+  }
+
+  update(){
+    // do nothing
+    this.delay.update();
+    if(this.delay.base == this.delay.dest){
+      // Open
+      var pl = PLAYER;
+      var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
+      if(dis < 720){
+        // Spawn Wave
+        //alert("spawn wave");
+        var dir = degToRad(getDirection(this.post.x, this.post.y, pl.post.x, pl.post.y));
+        var wave = instance_add(12, this.post.x, this.post.y);
+        wave.ang = dir;
+        wave.creator = this;
+        this.delay.base = 1;
+      }
+    }
   }
 
   draw(){
@@ -1150,7 +1221,12 @@ class Enemy {
 
   destroy(){
     // Spawn Loot Drops
-    if(random_int(10) < 4){
+    var chance = random_int(10);
+    if(chance < 8){
+      // Spawn OrbHP
+      instance_add(16, this.post.x+4, this.post.y);
+    }
+    if(chance < 4){
       // Spawn Orb
       instance_add(13, this.post.x, this.post.y);
     }
@@ -1293,8 +1369,9 @@ function instance_create(type, xx, yy){
     case 11: return new GrowRadius(xx, yy);
     case 12: return new Wave(xx, yy);
     case 13: return new Orb(xx, yy);
-    case 14: return new Spawner(xx, yy);
+    case 14: return new SpawnerWave(xx, yy);
     case 15: return new Enemy(xx, yy);
+    case 16: return new OrbHP(xx, yy);
   }
   return undefined;
 }
@@ -1490,9 +1567,10 @@ resize();
 /*
   TODO:
   - New Entity Types [
-    - HitBox Radius
-    - 
-    - Orb (Player Currency)
-    - StaminaOrb (Refills Player Stamina)
+    X- HitBox Radius
+    X- Enemy AI 
+    X- Orb (Player Currency)
+    X- StaminaOrb (Refills Player Stamina)
+
   ]
 */
