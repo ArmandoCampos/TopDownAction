@@ -1,6 +1,6 @@
 /*
 Armando Campos
-4/18/17
+4/18/17 - 4/27/17
 */
 // Constants
 const NONE = -1, TILE_SIZE = 64;
@@ -314,7 +314,7 @@ class Pendulum {
       if(this.base >= this.vmax){
         //this.base = this.vmax;
         this.dir = -1;
-x      }
+      }
     }else{ // Greater than, Decreasing
       if(this.base <= this.vmin){
         //this.base = this.vmin;
@@ -397,6 +397,7 @@ class AbstractEntity {
     this.batswing = false;
     this.batslide = new Slide(0, 0, 60);
     this.STATE = 0;
+    // Invincibility Frames
     this.stateslide = new Slide(0, 0, 0.05);
   }
   // Get
@@ -419,7 +420,6 @@ class AbstractEntity {
     this.post.y = yy;
   }
 
-  // should probably use deltatime instead but oh well
   // Physics
   gravity(){
     var weight = 0.5;
@@ -940,10 +940,10 @@ class HitRadius {
   }
 
   draw(){
-    //if(this.dmg == 0){
+    if(this.dmg == 0){
       draw_set_color(this.color);
       draw_circle(this.post.x, this.post.y, 8, this.radius);
-    //}
+    }
   }
 
   render(){
@@ -969,9 +969,9 @@ class Wave {
     this.LABEL = 0;
     this.post = {x: xx, y: yy};
     this.ang = 0;
-    this.spd = 96;
-    this.color = "tomato";
-    this.lifespan = 10;
+    this.spd = 32;
+    this.color = "violet";
+    this.lifespan = 9;
     this.creator = NONE;
   }
 
@@ -1022,14 +1022,13 @@ class Orb {
     this.post = {x: xx, y: yy};
     this.value = 1;
     this.color = "lightgreen";
-    this.pulsate = new Pendulum(24, 16, 24, 6);
+    this.pulsate = new Pendulum(20, 16, 24, 6);
 
   }
 
   update(){
     this.pulsate.update();
     // sit around
-    //var pl = GAME.PLAYER;
     var pl = PLAYER;
     var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
     if(dis < 48){
@@ -1094,7 +1093,8 @@ class SpawnerWave {
     this.instID = GAME.INSTANCES.length;
     this.LABEL = 0;
     this.post = {x: xx, y: yy};
-    this.delay = new Slide(0, 0, 0.1);
+    this.delay = new Slide(0, 0, 0.2);
+    this.color = "purple";
   }
 
   update(){
@@ -1104,7 +1104,7 @@ class SpawnerWave {
       // Open
       var pl = PLAYER;
       var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
-      if(dis < 720){
+      if(dis < 320){
         // Spawn Wave
         //alert("spawn wave");
         var dir = degToRad(getDirection(this.post.x, this.post.y, pl.post.x, pl.post.y));
@@ -1117,7 +1117,7 @@ class SpawnerWave {
   }
 
   draw(){
-    draw_set_color("red");
+    draw_set_color(this.color);
     draw_circle(this.post.x, this.post.y, 8, 32);
   }
 
@@ -1231,9 +1231,10 @@ class Enemy {
       instance_add(13, this.post.x, this.post.y);
     }
     instance_destroy(this.instID);
+    instance_add(15, 64, 64);
   }
 }
-
+ 
 /*
 GAME STATES:
 0 - INITIALIZATION
@@ -1277,11 +1278,12 @@ function update(){
       //level_load(GAME.level[1]);
       PLAYER = instance_add(0, canvas.width/2, canvas.height/2);
       var cwf = canvas.width/4, chf = canvas.height/4;
+      instance_add(15, cwf+32, chf+32);
+      // Wave Spawners
       instance_add(14, cwf, chf);
       instance_add(14, cwf, canvas.height - chf);
       instance_add(14, canvas.width - cwf, canvas.height - chf);
       instance_add(14, canvas.width - cwf, chf);
-      instance_add(15, cwf+32, chf+32);
       STATE = 1;
       break;
     case 1:
@@ -1391,7 +1393,6 @@ function btn_reset(){
 
 
 // DISPLAY FIX - - - - - - - - - - - - - - -
-// this prvents iOS browsers from moving the viewport on drag
 $(window).bind(
   'touchmove',
    function(e) {
