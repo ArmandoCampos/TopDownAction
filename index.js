@@ -24,6 +24,7 @@ var Key = {
   W: 87,
   T: 84,
   SPACE: 32,
+  SHIFT: 16,
   
   isDown: function(keyCode) {
     return this._pressed[keyCode];
@@ -377,7 +378,7 @@ class AbstractEntity {
     this.post = { x: xx, y : yy };
     this.vel = { h: 0, v : 0 };
     this.msk = new Mask(xx, yy, sz, sz);
-    this.spd = 8;//*(sz/32);
+    this.spd = 9;//*(sz/32);
     this.color = "tomato";
     // Physics
     this.hface = 1;
@@ -386,9 +387,9 @@ class AbstractEntity {
     this.onwallB = false;
     this.cling = false;
     // Player
-    this.hp_max = 10;
+    this.hp_max = 24;
     this.hp = this.hp_max;
-    this.stamina_max = 8;
+    this.stamina_max = 16;
     this.stamina = this.stamina_max;
     this.input_set(1);
     this.score = 0;
@@ -398,7 +399,7 @@ class AbstractEntity {
     this.batslide = new Slide(0, 0, 60);
     this.STATE = 0;
     // Invincibility Frames
-    this.stateslide = new Slide(0, 0, 0.05);
+    this.stateslide = new Slide(0, 0, 0.1);
   }
   // Get
   get side_l(){
@@ -449,7 +450,7 @@ class AbstractEntity {
   }
 
   stamina_charge(){
-    this.stamina += 0.5;
+    this.stamina += 1;
     if(this.stamina > this.stamina_max)this.stamina = this.stamina_max;
   }
 
@@ -481,7 +482,7 @@ class AbstractEntity {
   input_set(inpID){
     this.input = [Key.D, Key.A, Key.D, Key.W, Key.T];
     if(inpID == 1){
-      this.input = [Key.RIGHT, Key.LEFT, Key.DOWN, Key.UP], Key.SPACE;
+      this.input = [Key.RIGHT, Key.LEFT, Key.DOWN, Key.UP, Key.SHIFT];
     }
   }
 
@@ -532,29 +533,26 @@ class AbstractEntity {
     }
 
     if(isp){
+      if(this.batslide.base == this.batslide.dest){
+        if(this.batslide.dest == 0){
+          this.batslide.dest = -140;
+        }else{
+          this.batslide.dest = 0;
+        }
+        // Spawn Hitbox
+        var fang = degToRad(this.faceangle);
+        var nx = this.post.x+(this.vel.h*this.spd*3), ny = this.post.y+(this.vel.v*this.spd*3);
+        var hitx = nx+(lengthdir_x(96, fang)), hity = ny+(lengthdir_y(96, fang));
+        var hitr = instance_add(10, hitx, hity);
+        hitr.creator = this;
+        hitr.dmg = 4;
+      }
       // Swing
       if(this.stamina > 4){
-        if(this.batslide.base == this.batslide.dest){
-          this.stamina_use(4);
-          if(this.batslide.dest == 0){
-            this.batslide.dest = -140;
-          }else{
-            this.batslide.dest = 0;
-          }
-          // Spawn Hitbox
-          var fang = degToRad(this.faceangle);
-          var nx = this.post.x+(this.vel.h*this.spd*3), ny = this.post.y+(this.vel.v*this.spd*3);
-          var hitx = nx+(lengthdir_x(96, fang)), hity = ny+(lengthdir_y(96, fang));
-          var hitr = instance_add(10, hitx, hity);
-          hitr.creator = this;
-          // Spawn Wave
-          /*
-          if(this.hp == this.hp_max){
-            var wave = instance_add(12, hitx, hity);
-            wave.ang = fang;
-          }
-          */
-        }
+        this.stamina_use(4);
+        // Spawn Wave
+        var wave = instance_add(12, hitx, hity);
+        wave.ang = fang;
       }
     }else{
       this.stamina_charge();
@@ -754,6 +752,7 @@ class AbstractEntity {
       GAME.ctx.fillText("$"+String(this.score), 128, 128);
       // Draw Player
       draw_set_color("#FFFFFF");
+      if(this.stateslide.base != this.stateslide.dest)draw_set_color("red");
       var hfw = ww/2, hfh = hh/2;
       draw_line(this.side_l-hfw, this.side_u+hfh, this.side_l+hfw, this.side_d+hfh, 2, 0);
       draw_line(this.side_l+hfw, this.side_d+hfh, this.side_r+hfw, this.side_u+hfh, 2, 0);
@@ -931,6 +930,12 @@ class HitRadius {
                 //alert("hello");
                 inst.damage(this.dmg);
                 instance_destroy(this.instID);
+                // Spawn Dust Effect
+                var dstx = inst.post.x, dsty = inst.post.y;
+                var shock = instance_add(11, dstx, dsty);
+                shock.radspd = 18;
+                shock.radmax = 24;
+                shock.color = "orange";
               }
             }
           }
@@ -969,9 +974,9 @@ class Wave {
     this.LABEL = 0;
     this.post = {x: xx, y: yy};
     this.ang = 0;
-    this.spd = 32;
+    this.spd = 64;
     this.color = "violet";
-    this.lifespan = 9;
+    this.lifespan = 18;
     this.creator = NONE;
   }
 
@@ -982,17 +987,26 @@ class Wave {
     if(this.lifespan <= 0)instance_destroy(this.instID);
 
     // Check for Vulnerable Instance
-    var pl = PLAYER;
-    var dis = getDistance(this.post.x, this.post.y, pl.post.x, pl.post.y);
-    if(dis < 16){
-      // Within Range
-      if(pl.STATE == 0){
-        //alert("hey");
-        //var hit = new HitRadius(this.post.x, this.post.y);
-        var hit = instance_add(10, this.post.x, this.post.y);
-        hit.creator = this.creator;
-        hit.dmg = 1;
-        instance_destroy(this.instID);
+    var gridw = GAME.INSTANCES.length;
+    for(var i = 0; i < gridw; i++){
+      var inst = GAME.INSTANCES[i];
+      if(inst.LABEL == 1){
+        // Vulnerable
+        var dis = getDistance(this.post.x, this.post.y, inst.post.x, inst.post.y);
+        if(dis <= 48){
+          // Damage
+          if(this.creator != inst){
+            // Can Damage
+            if(inst.STATE == 0){
+              //alert("hey");
+              //var hit = new HitRadius(this.post.x, this.post.y);
+              var hit = instance_add(10, this.post.x, this.post.y);
+              hit.creator = this.creator;
+              hit.dmg = 2;
+              instance_destroy(this.instID);
+            }
+          }
+        }
       }
     }
   }
@@ -1276,7 +1290,9 @@ function update(){
   switch(STATE){
     case 0: // INITIALIZATION
       //level_load(GAME.level[1]);
-      PLAYER = instance_add(0, canvas.width/2, canvas.height/2);
+      PLAYER = instance_add(0, canvas.width/2, canvas.height/4);
+      instance_add(1, canvas.width/2, canvas.height - canvas.height/4);
+      /*
       var cwf = canvas.width/4, chf = canvas.height/4;
       instance_add(15, cwf+32, chf+32);
       // Wave Spawners
@@ -1284,6 +1300,7 @@ function update(){
       instance_add(14, cwf, canvas.height - chf);
       instance_add(14, canvas.width - cwf, canvas.height - chf);
       instance_add(14, canvas.width - cwf, chf);
+      */
       STATE = 1;
       break;
     case 1:
